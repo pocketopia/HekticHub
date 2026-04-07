@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "WaitlistEntry": {
+      "title": "Waitlist Entry",
+      "description": "A user's email signed up for a brand's waitlist.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address."
+        },
+        "brandId": {
+          "type": "string",
+          "description": "The ID of the brand the user is interested in."
+        },
+        "brandName": {
+          "type": "string",
+          "description": "The name of the brand."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user signed up."
+        }
+      },
+      "required": ["email", "brandId", "createdAt"]
+    },
+    "AppTemplate": {
+      "title": "App Template",
+      "description": "A demo template for a specific company.",
+      "type": "object",
+      "properties": {
+        "companyName": {
+          "type": "string",
+          "description": "The name of the company."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "The image of the app template."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the template was created."
+        }
+      },
+      "required": ["companyName", "imageUrl", "createdAt"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "A quote request or waitlist entry.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address."
+        },
+        "companyName": {
+          "type": "string",
+          "description": "The company name (for quote requests)."
+        },
+        "message": {
+          "type": "string",
+          "description": "The message or request details."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["waitlist", "quote"],
+          "description": "The type of inquiry."
+        },
+        "brandId": {
+          "type": "string",
+          "description": "The ID of the brand."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the inquiry was made."
+        }
+      },
+      "required": ["email", "type", "createdAt"]
+    },
+    "AssetOverride": {
+      "title": "Asset Override",
+      "description": "Custom image or video overrides for a brand.",
+      "type": "object",
+      "properties": {
+        "brandId": {
+          "type": "string",
+          "description": "The ID of the brand."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "The custom image URL."
+        },
+        "videoUrl": {
+          "type": "string",
+          "description": "The custom video URL."
+        },
+        "videoThumbnailUrl": {
+          "type": "string",
+          "description": "The custom video thumbnail URL."
+        },
+        "packagesImageUrl": {
+          "type": "string",
+          "description": "The custom wedding package tiers image URL."
+        },
+        "longDescription": {
+          "type": "string",
+          "description": "The custom long description for the brand."
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "url": { "type": "string" },
+              "type": { "type": "string", "enum": ["primary", "secondary", "video", "store"] }
+            }
+          },
+          "description": "The custom links for the brand."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the override was last updated."
+        }
+      },
+      "required": ["brandId", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/waitlist/{entryId}": {
+      "schema": "WaitlistEntry",
+      "description": "Collection of waitlist sign-ups (Legacy)."
+    },
+    "/appTemplates/{templateId}": {
+      "schema": "AppTemplate",
+      "description": "Demo templates for companies."
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": "Inquiry",
+      "description": "Consolidated mail/leads collection."
+    },
+    "/assets/{brandId}": {
+      "schema": "AssetOverride",
+      "description": "Custom asset overrides for brands."
+    }
+  }
+}

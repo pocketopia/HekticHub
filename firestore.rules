@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: waitlist
+    // Document ID: auto-generated
+    // Fields:
+    //   - email: string (required, email format)
+    //   - brandId: string (required)
+    //   - brandName: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "orchestraofdeath@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidWaitlistEntry(data) {
+      return data.keys().hasAll(['email', 'brandId', 'createdAt']) &&
+             data.email is string && data.email.size() > 0 && data.email.size() < 256 &&
+             data.brandId is string && data.brandId.size() > 0 &&
+             data.createdAt is timestamp;
+    }
+
+    match /waitlist/{entryId} {
+      allow create: if isValidWaitlistEntry(request.resource.data);
+      allow read: if isAdmin();
+    }
+
+    match /appTemplates/{templateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /inquiries/{inquiryId} {
+      allow create: if request.resource.data.keys().hasAll(['email', 'type', 'createdAt']) &&
+                      request.resource.data.email is string &&
+                      request.resource.data.type in ['waitlist', 'quote'];
+      allow read: if isAdmin();
+    }
+
+    match /assets/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
