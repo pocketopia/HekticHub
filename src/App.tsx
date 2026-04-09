@@ -1,179 +1,131 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
 import { CategoryType, Brand } from './types';
-import { BRANDS, CATEGORY_ICONS } from './constants';
+import { BRANDS } from './constants';
 import { BrandCard } from './components/BrandCard';
 import { BrandModal } from './components/BrandModal';
 import { AdminMenu } from './components/AdminMenu';
-import { ChevronDown, Menu, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
+import { ShieldCheck, Activity } from 'lucide-react';
 
 import { db, auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
-// --- HELPER: Handles URL-to-Brand Logic ---
+// --- DEEP LINK HANDLER ---
+// This watches the URL and forces the modal open if a user visits a link directly
 const BusinessRoute = ({ brands, setSelectedBrand }: { brands: Brand[], setSelectedBrand: (b: Brand) => void }) => {
   const { businessId } = useParams();
   
   useEffect(() => {
-    // We check the URL and open the corresponding brand automatically
-    const brand = brands.find(b => b.id.toLowerCase() === businessId?.toLowerCase());
-    if (brand) {
-      setSelectedBrand(brand);
-      document.title = `${brand.name} | Hektic Hub`;
+    if (businessId) {
+      const brand = brands.find(b => b.id.toLowerCase() === businessId.toLowerCase());
+      if (brand) {
+        setSelectedBrand(brand);
+        document.title = `${brand.name} | Hektic Hub`;
+      }
     }
   }, [businessId, brands, setSelectedBrand]);
 
   return null;
 };
 
-// --- MAIN CONTENT ---
+// --- MAIN APP LOGIC ---
 const AppContent: React.FC = () => {
-  const [activeCategory, setActiveCategory] = useState<CategoryType | 'all'>('all');
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [adminPassword, setAdminPassword] = useState('');
-  const [passwordError, setPasswordError] = useState(false);
   const [brands, setBrands] = useState<Brand[]>(BRANDS);
-  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   
   const navigate = useNavigate();
 
-  // 1. Sync Auth State
+  // 1. Monitor Auth State
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
+    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsubscribe();
   }, []);
 
-  // 2. Sync Firebase Assets (Keeps your Admin uploads "Sticky")
+  // 2. Sync with Firebase (With bypass logic for Quota Errors)
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'assets'), (snapshot) => {
-      const overrides: Record<string, any> = {};
-      snapshot.forEach((doc) => {
-        const id = doc.id;
-        const data = doc.data();
-        if (id.includes('_')) {
-          const lastIndex = id.lastIndexOf('_');
-          const bId = id.substring(0, lastIndex);
-          const field = id.substring(lastIndex + 1);
-          if (!overrides[bId]) overrides[bId] = {};
-          overrides[bId][field] = data.value;
-        } else {
-          if (!overrides[id]) overrides[id] = {};
-          Object.assign(overrides[id], data);
-        }
-      });
-
-      // Apply the overrides from Firebase to your local BRANDS list
-      setBrands(BRANDS.map(b => ({ ...b, ...(overrides[b.id] || {}) })));
-      setIsAssetsLoading(false);
-    }, (error) => {
-      console.error("Firestore Sync Error:", error);
-      setIsAssetsLoading(false);
-    });
+    const unsubscribe = onSnapshot(collection(db, 'assets'), 
+      (snapshot) => {
+        const overrides: Record<string, any> = {};
+        snapshot.forEach((doc) => {
+          overrides[doc.id] = doc.data();
+        });
+        setBrands(BRANDS.map(b => ({ ...b, ...(overrides[b.id] || {}) })));
+        setIsAssetsLoading(false);
+      }, 
+      (error) => {
+        console.error("FIRESTORE ERROR (Likely Quota):", error);
+        // If Firestore fails, we stop the loading spinner so the user can still use the site
+        setIsAssetsLoading(false);
+      }
+    );
     return () => unsubscribe();
   }, []);
 
-  const filteredBrands = useMemo(() => 
-    activeCategory === 'all' ? brands : brands.filter(b => b.category === activeCategory),
-    [activeCategory, brands]
-  );
-
-  const handleAdminClick = () => {
-    setIsPasswordModalOpen(true);
-    setPasswordError(false);
-    setAdminPassword('');
-  };
-
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPassword === 'hektic2024') {
-      setIsAdminOpen(true);
-      setIsPasswordModalOpen(false);
-    } else {
-      setPasswordError(true);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      // Ensure the popup works on hektichub.com
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Google Auth Error:", error);
-      alert("Auth failed. Check if hektichub.com is authorized in Firebase Console.");
-    }
+  // 3. Navigation Handler (The Phase 1 Engine)
+  const handleBrandSelection = (brand: Brand) => {
+    const urlFriendlyId = brand.id.toLowerCase().replace(/\s+/g, '-');
+    
+    // We navigate FIRST to ensure the URL updates immediately
+    navigate(`/${urlFriendlyId}`);
+    setSelectedBrand(brand);
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-red-600 font-mono">
-      {/* Invisible Admin Trigger */}
-      <div className="bg-red-600 h-1 flex items-center justify-center overflow-hidden hover:h-8 transition-all duration-500 group relative z-[50]">
-         <button onClick={handleAdminClick} className="opacity-0 group-hover:opacity-100 flex items-center gap-2 text-[10px] font-black uppercase text-black tracking-widest transition-opacity">
-           <ShieldCheck className="w-3 h-3" /> Enter Command Center
-         </button>
-      </div>
-
-      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" onClick={() => { setSelectedBrand(null); document.title = "Hektic Hub"; }} className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center font-black text-xl shadow-[0_0_15px_rgba(220,38,38,0.6)]">H</div>
-            <h1 className="text-2xl font-black tracking-tighter uppercase hidden sm:block">Hektic <span className="text-red-600">Hub</span></h1>
+    <div className="min-h-screen bg-black text-white font-mono selection:bg-red-600">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-black/90 backdrop-blur-md border-b border-zinc-900 p-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <Link 
+            to="/" 
+            onClick={() => { setSelectedBrand(null); navigate('/'); }}
+            className="text-red-600 font-black text-2xl tracking-tighter flex items-center gap-2"
+          >
+            <Activity /> HEKTIC HUB
           </Link>
-
-          <div className="hidden md:flex items-center gap-8">
-            <button onClick={() => {setActiveCategory('all'); navigate('/');}} className={`text-xs uppercase tracking-widest ${activeCategory === 'all' ? 'text-red-600' : 'text-gray-400'}`}>All Access</button>
-            {['services', 'entertainment', 'streaming', 'affiliations'].map((cat) => (
-              <button key={cat} onClick={() => setActiveCategory(cat as CategoryType)} className={`text-xs uppercase tracking-widest ${activeCategory === cat ? 'text-red-600' : 'text-gray-400'}`}>{cat}</button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button onClick={handleAdminClick} className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full glass-card text-[10px] font-bold text-gray-400 hover:text-red-500 transition-all">
-              <ShieldCheck className="w-4 h-4" /> ADMIN
-            </button>
-          </div>
+          
+          <button 
+            onClick={() => setIsAdminOpen(true)}
+            className="p-2 text-zinc-700 hover:text-red-600 transition-colors"
+          >
+            <ShieldCheck size={24} />
+          </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 mt-12">
+      {/* Main Layout */}
+      <main className="max-w-7xl mx-auto p-6">
         <Routes>
+          {/* Dashboard View */}
           <Route path="/" element={
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredBrands.map(brand => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {brands.map(brand => (
                 <BrandCard 
                   key={brand.id} 
                   brand={brand} 
-                  onClick={() => {
-                    if (brand.id === 'rise-of-darkus') {
-                      window.open('https://a.co/d/04Bezv58', '_blank');
-                    } else {
-                      setSelectedBrand(brand);
-                      navigate(`/${brand.id.toLowerCase()}`); // CHANGES DOMAIN TO /#/brandname
-                    }
-                  }} 
+                  onClick={() => handleBrandSelection(brand)} 
                 />
               ))}
             </div>
           } />
-          
+
+          {/* Deep Link View */}
           <Route path="/:businessId" element={
             <>
               <BusinessRoute brands={brands} setSelectedBrand={setSelectedBrand} />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-20 blur-sm pointer-events-none">
-                {filteredBrands.map(brand => <BrandCard key={brand.id} brand={brand} onClick={() => {}} />)}
+              {/* Background stays visible but dimmed */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 opacity-20 pointer-events-none blur-sm">
+                {brands.map(brand => <BrandCard key={brand.id} brand={brand} onClick={() => {}} />)}
               </div>
             </>
           } />
         </Routes>
       </main>
 
-      {/* Detail Modal */}
+      {/* The Section Modal */}
       {selectedBrand && (
         <BrandModal 
           brand={selectedBrand} 
@@ -185,63 +137,41 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Admin Auth Modal */}
-      {isPasswordModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setIsPasswordModalOpen(false)} />
-          <div className="relative w-full max-w-md glass-card rounded-3xl p-8 space-y-6 text-center border border-white/10">
-            <ShieldCheck className="w-12 h-12 text-red-600 mx-auto" />
-            <h3 className="text-xl font-black uppercase tracking-widest">Security Check</h3>
-            
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <input 
-                type="password" 
-                autoFocus 
-                value={adminPassword} 
-                onChange={(e) => setAdminPassword(e.target.value)} 
-                placeholder="••••••••" 
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-center text-xl tracking-widest focus:border-red-500 outline-none transition-all" 
-              />
-              {passwordError && <p className="text-[10px] text-red-500 uppercase font-bold">Access Denied</p>}
-              
-              {!user && (
-                <button 
-                  type="button" 
-                  onClick={handleGoogleLogin} 
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 rounded-xl text-[10px] font-bold uppercase border border-white/10 hover:bg-white/10 transition-all"
-                >
-                  <Activity size={14} className="text-red-500" /> Login with Google for Cloud Sync
-                </button>
-              )}
-
-              <div className="flex gap-2 pt-4">
-                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 py-4 bg-white/5 rounded-xl font-bold uppercase text-[10px]">Abort</button>
-                <button type="submit" className="flex-1 py-4 bg-red-600 rounded-xl font-bold uppercase text-[10px] shadow-[0_0_20px_rgba(220,38,38,0.3)]">Verify</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* Admin Panel */}
+      {isAdminOpen && (
+        <AdminMenu 
+          brands={brands} 
+          user={user} 
+          onClose={() => setIsAdminOpen(false)} 
+          onLogin={async () => {
+            const provider = new GoogleAuthProvider();
+            try {
+              await signInWithPopup(auth, provider);
+            } catch (err) {
+              console.error("Login Error:", err);
+              alert("Ensure hektichub.com is added to Authorized Domains in Firebase.");
+            }
+          }}
+        />
       )}
 
-      {isAdminOpen && <AdminMenu brands={brands} onUpdateBrands={setBrands} user={user} onClose={() => setIsAdminOpen(false)} />}
-      
+      {/* Loading Overlay */}
       {isAssetsLoading && (
-        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-red-600 rounded-2xl animate-pulse flex items-center justify-center shadow-[0_0_40px_rgba(220,38,38,0.4)]">
-            <ShieldCheck className="w-8 h-8 text-white" />
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+          <div className="text-red-600 animate-pulse font-black tracking-widest uppercase">
+            Syncing Ecosystem...
           </div>
-          <p className="mt-4 text-[10px] text-red-500 font-bold uppercase tracking-widest animate-pulse">Establishing Uplink...</p>
         </div>
       )}
     </div>
   );
 };
 
-// --- FINAL WRAPPER: HashRouter is key for GitHub Pages ---
-const App: React.FC = () => (
-  <Router>
-    <AppContent />
-  </Router>
-);
-
-export default App;
+// --- WRAPPER ---
+export default function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+}
