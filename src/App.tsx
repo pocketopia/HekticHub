@@ -5,36 +5,163 @@ import { BRANDS, CATEGORY_ICONS } from './constants';
 import { BrandCard } from './components/BrandCard';
 import { BrandModal } from './components/BrandModal';
 import { AdminMenu } from './components/AdminMenu';
-import { ChevronDown, Menu, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Menu, Activity } from 'lucide-react';
 
 import { db, auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
-// Helper component to handle the specific business logic
+// --- HELPER COMPONENT: Manages URL-to-Brand Logic ---
 const BusinessRoute = ({ brands, setSelectedBrand }: { brands: Brand[], setSelectedBrand: (b: Brand) => void }) => {
   const { businessId } = useParams();
   
   useEffect(() => {
-    const brand = brands.find(b => b.id === businessId || b.id.toLowerCase() === businessId?.toLowerCase());
+    // Find the brand that matches the URL
+    const brand = brands.find(b => b.id.toLowerCase() === businessId?.toLowerCase());
     if (brand) {
       setSelectedBrand(brand);
       document.title = `${brand.name} | Hektic Hub`;
     }
   }, [businessId, brands, setSelectedBrand]);
 
-  return null; // This component just manages state based on the URL
+  return null; 
 };
 
-const App: React.FC = () => {
+// --- MAIN APP CONTENT ---
+// We move the main logic into a sub-component so we can use 'useNavigate' inside the Router
+const AppContent: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<CategoryType | 'all'>('all');
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isUserMode, setIsUserMode] = useState(false);
   const [brands, setBrands] = useState<Brand[]>(BRANDS);
   const [user, setUser] = useState<User | null>(null);
+  
+  const navigate = useNavigate(); // This is the "Engine" that changes the URL
 
-  // Syncing with your existing Firebase logic
+  // Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Firestore Sync (Keeps your Admin uploads "Sticky")
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'assets'), (snapshot) => {
+      const overrides: Record<string, any> = {};
+      snapshot.forEach((doc) => {
+        const id = doc.id;
+        const data = doc.data();
+        if (id.includes('_')) {
+          const lastIndex = id.lastIndexOf('_');
+          const bId = id.substring(0, lastIndex);
+          const field = id.substring(lastIndex + 1);
+          if (!overrides[bId]) overrides[bId] = {};
+          overrides[bId][field] = data.value;
+        } else {
+          if (!overrides[id]) overrides[id] = {};
+          Object.assign(overrides[id], data);
+        }
+      });
+
+      // Merge Firebase data into the local list
+      setBrands(BRANDS.map(b => ({ ...b, ...(overrides[b.id] || {}) })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const filteredBrands = useMemo(() => 
+    activeCategory === 'all' ? brands : brands.filter(b => b.category === activeCategory),
+    [activeCategory, brands]
+  );
+
+  return (
+    <div className="min-h-screen bg-black text-white font-mono">
+      {/* Header / Nav */}
+      <header className="border-b border-zinc-800 p-4 flex justify-between items-center bg-black/80 backdrop-blur-md sticky top-0 z-40">
+        <Link 
+          to="/" 
+          onClick={() => {
+            setSelectedBrand(null);
+            document.title = "Hektic Hub | Mothership";
+          }} 
+          className="text-red-600 font-bold tracking-tighter text-2xl flex items-center gap-2"
+        >
+          <Activity size={24} /> HEKTIC HUB
+        </Link>
+        
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setIsAdminOpen(!isAdminOpen)} 
+            className="p-2 text-zinc-500 hover:text-white transition-colors"
+          >
+            <Menu size={24} />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Grid Section */}
+      <main className="p-6 max-w-7xl mx-auto">
+        <Routes>
+          {/* Default view */}
+          <Route path="/" element={
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredBrands.map(brand => (
+                <BrandCard 
+                  key={brand.id} 
+                  brand={brand} 
+                  onClick={() => {
+                    setSelectedBrand(brand);
+                    navigate(`/${brand.id.toLowerCase()}`); // CHANGES THE URL
+                  }} 
+                />
+              ))}
+            </div>
+          } />
+
+          {/* Business-specific deep link view */}
+          <Route path="/:businessId" element={
+            <>
+              <BusinessRoute brands={brands} setSelectedBrand={setSelectedBrand} />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 opacity-30 blur-[2px] pointer-events-none">
+                 {filteredBrands.map(brand => (
+                   <BrandCard key={brand.id} brand={brand} onClick={() => {}} />
+                 ))}
+              </div>
+            </>
+          } />
+        </Routes>
+      </main>
+
+      {/* The Detail Modal (The Section View) */}
+      {selectedBrand && (
+        <BrandModal 
+          brand={selectedBrand} 
+          onClose={() => {
+            setSelectedBrand(null);
+            navigate('/'); // CLEANS THE URL WHEN CLOSED
+            document.title = "Hektic Hub | Mothership";
+          }} 
+        />
+      )}
+
+      {/* Admin Panel Overlay */}
+      {isAdminOpen && <AdminMenu user={user} onClose={() => setIsAdminOpen(false)} />}
+    </div>
+  );
+};
+
+// --- WRAPPER: Ensures Router context is available to AppContent ---
+const App: React.FC = () => {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+};
+
+export default App;  // Syncing with your existing Firebase logic
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
