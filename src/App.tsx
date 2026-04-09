@@ -1,5 +1,5 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
 import { CategoryType, Brand } from './types';
 import { BRANDS, CATEGORY_ICONS } from './constants';
 import { BrandCard } from './components/BrandCard';
@@ -9,82 +9,122 @@ import { ChevronDown, Menu, ArrowRight, ShieldCheck } from 'lucide-react';
 
 import { db, auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
+
+// Helper component to handle the specific business logic
+const BusinessRoute = ({ brands, setSelectedBrand }: { brands: Brand[], setSelectedBrand: (b: Brand) => void }) => {
+  const { businessId } = useParams();
+  
+  useEffect(() => {
+    const brand = brands.find(b => b.id === businessId || b.id.toLowerCase() === businessId?.toLowerCase());
+    if (brand) {
+      setSelectedBrand(brand);
+      document.title = `${brand.name} | Hektic Hub`;
+    }
+  }, [businessId, brands, setSelectedBrand]);
+
+  return null; // This component just manages state based on the URL
+};
 
 const App: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<CategoryType | 'all'>('all');
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isUserMode, setIsUserMode] = useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [adminPassword, setAdminPassword] = useState('');
-  const [passwordError, setPasswordError] = useState(false);
   const [brands, setBrands] = useState<Brand[]>(BRANDS);
-  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Handle URL parameters for QR code access
+  // Syncing with your existing Firebase logic
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'templates') {
-      setIsUserMode(true);
-      setIsAdminOpen(true);
-    }
-  }, []);
-
-  // Track Auth State
-  useEffect(() => {
-    console.log("App: Setting up onAuthStateChanged");
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log("App: Auth state changed:", currentUser?.email, "Verified:", currentUser?.emailVerified);
       setUser(currentUser);
-      setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
 
-  // Load custom assets from Firestore on mount
   useEffect(() => {
-    console.log("App: Setting up assets onSnapshot");
     const unsubscribe = onSnapshot(collection(db, 'assets'), (snapshot) => {
-      console.log("App: Assets snapshot received. Count:", snapshot.size);
       const overrides: Record<string, any> = {};
-      
       snapshot.forEach((doc) => {
         const id = doc.id;
         const data = doc.data();
-        
-        // Handle split assets (format: brandId_field)
         if (id.includes('_')) {
-          const lastUnderscoreIndex = id.lastIndexOf('_');
-          const brandId = id.substring(0, lastUnderscoreIndex);
-          const field = id.substring(lastUnderscoreIndex + 1);
-          
-          if (!overrides[brandId]) overrides[brandId] = {};
-          // Split assets take precedence
-          overrides[brandId][field] = data.value;
+          const lastIndex = id.lastIndexOf('_');
+          const bId = id.substring(0, lastIndex);
+          const field = id.substring(lastIndex + 1);
+          if (!overrides[bId]) overrides[bId] = {};
+          overrides[bId][field] = data.value;
         } else {
-          // Backward compatibility for the old single-doc format
-          // Only apply fields that haven't been set by split assets yet
           if (!overrides[id]) overrides[id] = {};
-          Object.keys(data).forEach(key => {
-            if (overrides[id][key] === undefined) {
-              overrides[id][key] = data[key];
-            }
-          });
+          Object.assign(overrides[id], data);
         }
       });
 
-      setBrands(() => {
-        console.log("App: Merging overrides into brands state");
-        return BRANDS.map(b => {
-          const override = overrides[b.id];
-          if (!override) return b;
+      setBrands(BRANDS.map(b => ({ ...b, ...(overrides[b.id] || {}) })));
+    });
+    return () => unsubscribe();
+  }, []);
 
-          console.log(`App: Applying overrides for ${b.id}`);
-          return {
-            ...b,
+  const filteredBrands = useMemo(() => 
+    activeCategory === 'all' ? brands : brands.filter(b => b.category === activeCategory),
+    [activeCategory, brands]
+  );
+
+  return (
+    <Router>
+      <div className="min-h-screen bg-black text-white font-mono">
+        {/* Navigation / Header */}
+        <header className="border-b border-zinc-800 p-4 flex justify-between items-center bg-black/50 backdrop-blur-md sticky top-0 z-40">
+          <Link to="/" onClick={() => setSelectedBrand(null)} className="text-red-600 font-bold tracking-tighter text-2xl">
+            HEKTIC HUB
+          </Link>
+          <div className="flex gap-4">
+            {user && <button onClick={() => setIsAdminOpen(!isAdminOpen)} className="text-zinc-500 hover:text-white"><Menu /></button>}
+          </div>
+        </header>
+
+        <main className="p-6">
+          <Routes>
+            {/* The Main Dashboard */}
+            <Route path="/" element={
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredBrands.map(brand => (
+                  <BrandCard key={brand.id} brand={brand} onClick={() => setSelectedBrand(brand)} />
+                ))}
+              </div>
+            } />
+
+            {/* The Specific Business Deep Links */}
+            <Route path="/:businessId" element={
+              <>
+                <BusinessRoute brands={brands} setSelectedBrand={setSelectedBrand} />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-20 pointer-events-none">
+                   {/* Background grid stays visible but faded */}
+                   {filteredBrands.map(brand => <BrandCard key={brand.id} brand={brand} onClick={() => {}} />)}
+                </div>
+              </>
+            } />
+          </Routes>
+        </main>
+
+        {/* Your Existing Modal - Now acts as the "Section View" */}
+        {selectedBrand && (
+          <BrandModal 
+            brand={selectedBrand} 
+            onClose={() => {
+              setSelectedBrand(null);
+              window.history.pushState(null, '', '/'); // Cleans the URL back to hektichub.com when closed
+            }} 
+          />
+        )}
+
+        {isAdminOpen && <AdminMenu user={user} onClose={() => setIsAdminOpen(false)} />}
+      </div>
+    </Router>
+  );
+};
+
+export default App;            ...b,
             imageUrl: override.imageUrl !== undefined ? (override.imageUrl || b.imageUrl) : b.imageUrl,
             videoUrl: override.videoUrl !== undefined ? (override.videoUrl || b.videoUrl) : b.videoUrl,
             videoThumbnailUrl: override.videoThumbnailUrl !== undefined ? (override.videoThumbnailUrl || b.videoThumbnailUrl) : b.videoThumbnailUrl,
