@@ -229,3 +229,8 @@ const AppContent: React.FC = () => {
 
 const App = () => (
   <Router>
+    <AppContent />
+  </Router>
+);
+
+export default App;
