@@ -29,30 +29,18 @@ const AppContent: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // THE QR CODE FIX: Listen to the URL on load and when it changes
+  // 1. THE QR CODE / DIRECT LINK FIX
   useEffect(() => {
-    // Get the ID from the URL (e.g., from /pocketopia)
     const pathId = location.pathname.replace('/', '');
-    
-    if (pathId) {
-      // Find the brand that matches that ID
+    if (pathId && brands.length > 0) {
       const brandToOpen = brands.find(b => b.id === pathId);
       if (brandToOpen) {
         setSelectedBrand(brandToOpen);
       }
-    } else {
+    } else if (!pathId) {
       setSelectedBrand(null);
     }
-  }, [location.pathname, brands]); // Runs whenever the URL changes
-
-  // Handle URL parameters for admin templates
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'templates') {
-      setIsUserMode(true);
-      setIsAdminOpen(true);
-    }
-  }, []);
+  }, [location.pathname, brands]);
 
   // Track Auth State
   useEffect(() => {
@@ -63,23 +51,28 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Load assets from Firestore
+  // 2. RESTORED: THE HEAVY-DUTY DATA MERGE (Keeps your custom images/titles)
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'assets'), (snapshot) => {
       const overrides: Record<string, any> = {};
+      
       snapshot.forEach((doc) => {
         const id = doc.id;
         const data = doc.data();
+        
         if (id.includes('_')) {
           const lastUnderscoreIndex = id.lastIndexOf('_');
           const brandId = id.substring(0, lastUnderscoreIndex);
           const field = id.substring(lastUnderscoreIndex + 1);
+          
           if (!overrides[brandId]) overrides[brandId] = {};
           overrides[brandId][field] = data.value;
         } else {
           if (!overrides[id]) overrides[id] = {};
           Object.keys(data).forEach(key => {
-            if (overrides[id][key] === undefined) overrides[id][key] = data[key];
+            if (overrides[id][key] === undefined) {
+              overrides[id][key] = data[key];
+            }
           });
         }
       });
@@ -87,15 +80,16 @@ const AppContent: React.FC = () => {
       setBrands(BRANDS.map(b => {
         const override = overrides[b.id];
         if (!override) return b;
+
         return {
           ...b,
-          imageUrl: override.imageUrl || b.imageUrl,
-          videoUrl: override.videoUrl || b.videoUrl,
-          videoThumbnailUrl: override.videoThumbnailUrl || b.videoThumbnailUrl,
-          packagesImageUrl: override.packagesImageUrl || b.packagesImageUrl,
-          description: override.description || b.description,
-          longDescription: override.longDescription || b.longDescription,
-          links: override.links || b.links
+          imageUrl: override.imageUrl !== undefined ? (override.imageUrl || b.imageUrl) : b.imageUrl,
+          videoUrl: override.videoUrl !== undefined ? (override.videoUrl || b.videoUrl) : b.videoUrl,
+          videoThumbnailUrl: override.videoThumbnailUrl !== undefined ? (override.videoThumbnailUrl || b.videoThumbnailUrl) : b.videoThumbnailUrl,
+          packagesImageUrl: override.packagesImageUrl !== undefined ? (override.packagesImageUrl || b.packagesImageUrl) : b.packagesImageUrl,
+          description: override.description !== undefined ? (override.description || b.description) : b.description,
+          longDescription: override.longDescription !== undefined ? (override.longDescription || b.longDescription) : b.longDescription,
+          links: override.links !== undefined ? (override.links || b.links) : b.links
         };
       }));
       setIsAssetsLoading(false);
@@ -103,6 +97,7 @@ const AppContent: React.FC = () => {
       console.error("Firestore Error:", error);
       setIsAssetsLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -135,6 +130,7 @@ const AppContent: React.FC = () => {
       {categories.map(cat => {
         const brandsInCat = filteredBrands.filter(b => b.category === cat);
         if (brandsInCat.length === 0) return null;
+
         return (
           <section key={cat} className="space-y-4 sm:space-y-8">
             <div className="flex items-center gap-4 border-b border-white/10 pb-4">
@@ -146,6 +142,7 @@ const AppContent: React.FC = () => {
                 Expand <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
+            
             <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
               {brandsInCat.map(brand => (
                 <BrandCard 
@@ -155,7 +152,7 @@ const AppContent: React.FC = () => {
                     if (b.id === 'rise-of-darkus') {
                       window.open('https://a.co/d/04Bezv58', '_blank');
                     } else {
-                      navigate(`/${b.id}`); // URL changes, useEffect handles the modal
+                      navigate(`/${b.id}`);
                     }
                   }} 
                 />
@@ -168,7 +165,8 @@ const AppContent: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className="min-h-screen bg-black text-white selection:bg-red-600 pb-20">
+      {/* Admin Quick Bar */}
       <div className="bg-red-600 h-1 flex items-center justify-center overflow-hidden hover:h-8 transition-all duration-500 group relative z-[50]">
           <button onClick={handleAdminClick} className="opacity-0 group-hover:opacity-100 flex items-center gap-2 text-[10px] font-futuristic font-black uppercase text-black tracking-widest">
             <ShieldCheck className="w-3 h-3" /> Enter Command Center
@@ -181,12 +179,14 @@ const AppContent: React.FC = () => {
             <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center font-futuristic font-black text-xl shadow-[0_0_15px_rgba(220,38,38,0.6)]">H</div>
             <h1 className="font-futuristic text-2xl font-black tracking-tighter uppercase hidden sm:block">Hektic <span className="text-red-600">Hub</span></h1>
           </div>
+
           <div className="hidden md:flex items-center gap-8">
-            <button onClick={() => { setActiveCategory('all'); navigate('/'); }} className={`font-futuristic text-xs uppercase tracking-widest ${activeCategory === 'all' ? 'text-red-600' : 'text-gray-400'}`}>All Access</button>
+            <button onClick={() => { setActiveCategory('all'); navigate('/'); }} className={`font-futuristic text-xs uppercase tracking-widest transition-colors ${activeCategory === 'all' ? 'text-red-600' : 'text-gray-400 hover:text-white'}`}>All Access</button>
             {(Object.keys(CATEGORY_ICONS) as CategoryType[]).map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} className={`font-futuristic text-xs uppercase tracking-widest ${activeCategory === cat ? 'text-red-600' : 'text-gray-400'}`}>{cat}</button>
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`font-futuristic text-xs uppercase tracking-widest transition-colors ${activeCategory === cat ? 'text-red-600' : 'text-gray-400 hover:text-white'}`}>{cat}</button>
             ))}
           </div>
+
           <div className="flex items-center gap-4">
             <button onClick={handleAdminClick} className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full glass-card text-[10px] font-futuristic font-bold text-gray-400"><ShieldCheck className="w-4 h-4" /> ADMIN</button>
             <button className="p-2 rounded-full glass-card"><Menu className="w-5 h-5" /></button>
@@ -194,7 +194,20 @@ const AppContent: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 mt-8 sm:mt-12">
+      {/* Hero Section */}
+      <section className="relative h-[40vh] sm:h-[50vh] flex flex-col items-center justify-center text-center overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] bg-red-600/10 rounded-full blur-[80px] sm:blur-[120px] animate-pulse-red" />
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10" />
+        </div>
+        <div className="relative z-10 max-w-4xl px-6">
+          <h2 className="font-futuristic text-3xl md:text-7xl font-black mb-4 sm:mb-6 leading-none tracking-tight">THE <span className="text-red-600 red-glow">HEKTIC</span> ECOSYSTEM</h2>
+          <p className="text-base sm:text-xl text-gray-400 font-light max-w-2xl mx-auto leading-relaxed">A premier collective curated for the modern visionary.</p>
+        </div>
+        <div className="absolute bottom-6 sm:bottom-10 animate-bounce"><ChevronDown className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" /></div>
+      </section>
+
+      <main className="max-w-7xl mx-auto px-6 mt-8 sm:mt-12 min-h-[40vh]">
         {activeCategory === 'all' ? <GroupedView /> : (
           <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
             {filteredBrands.map(brand => (
@@ -204,25 +217,53 @@ const AppContent: React.FC = () => {
         )}
       </main>
 
-      {selectedBrand && <BrandModal brand={selectedBrand} onClose={() => navigate('/')} />}
+      {selectedBrand && (
+        <BrandModal 
+          brand={selectedBrand} 
+          onClose={() => {
+            setSelectedBrand(null);
+            navigate('/');
+          }} 
+        />
+      )}
+      
+      {isAssetsLoading && (
+        <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center space-y-4">
+          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center animate-pulse shadow-[0_0_50px_rgba(220,38,38,0.5)]">
+            <ShieldCheck className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="font-futuristic text-xl font-black uppercase tracking-[0.3em] text-white">Initializing</h3>
+        </div>
+      )}
       
       {isPasswordModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setIsPasswordModalOpen(false)} />
           <div className="relative w-full max-w-md glass-card rounded-3xl p-8 space-y-8">
-            <h3 className="font-futuristic text-2xl font-black text-center uppercase">Security Check</h3>
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-red-600 rounded-2xl mx-auto flex items-center justify-center"><ShieldCheck className="w-8 h-8 text-white" /></div>
+              <h3 className="font-futuristic text-2xl font-black uppercase tracking-widest mt-4">Security Check</h3>
+            </div>
             <form onSubmit={handlePasswordSubmit} className="space-y-6">
-              <input type="password" autoFocus value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-center text-xl focus:outline-none" />
+              <input type="password" autoFocus value={adminPassword} onChange={(e) => { setAdminPassword(e.target.value); setPasswordError(false); }} className={`w-full bg-white/5 border ${passwordError ? 'border-red-500' : 'border-white/10'} rounded-2xl px-6 py-4 text-center text-xl focus:outline-none`} />
               <div className="flex gap-3">
-                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 px-6 py-4 rounded-2xl glass-card text-[10px] font-bold">Abort</button>
-                <button type="submit" className="flex-1 px-6 py-4 rounded-2xl bg-red-600 text-[10px] font-bold">Verify</button>
+                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="flex-1 px-6 py-4 rounded-2xl glass-card text-[10px] font-bold uppercase">Abort</button>
+                <button type="submit" className="flex-1 px-6 py-4 rounded-2xl bg-red-600 text-[10px] font-bold uppercase shadow-[0_0_20px_rgba(220,38,38,0.3)]">Verify</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {isAdminOpen && <AdminMenu brands={brands} onUpdateBrands={handleUpdateBrands} onClose={() => setIsAdminOpen(false)} user={user} isAuthReady={isAuthReady} />}
+      {isAdminOpen && (
+        <AdminMenu 
+          brands={brands} 
+          onUpdateBrands={handleUpdateBrands} 
+          onClose={() => setIsAdminOpen(false)} 
+          user={user} 
+          isAuthReady={isAuthReady} 
+        />
+      )}
     </div>
   );
 };
