@@ -13,9 +13,10 @@ import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider } from 'f
 // --- POCKETOPIA PORTFOLIO COMPONENT (Apple Store Design) ---
 interface PortfolioProps {
   onBack: () => void;
+  onNavigateToPrivacy: () => void;
 }
 
-const PocketopiaPortfolio: React.FC<PortfolioProps> = ({ onBack }) => {
+const PocketopiaPortfolio: React.FC<PortfolioProps> = ({ onBack, onNavigateToPrivacy }) => {
   const apps = [
     {
       id: 'bandtag',
@@ -49,14 +50,14 @@ const PocketopiaPortfolio: React.FC<PortfolioProps> = ({ onBack }) => {
           {apps.map((app) => (
             <div key={app.id} className="group relative bg-[#0A0A0A] border border-white/5 rounded-[2.5rem] p-8 hover:bg-[#111111] transition-all duration-500">
               <div className="flex flex-col md:flex-row gap-8 items-start">
-                <img src={app.icon} alt={app.name} className="w-24 h-24 md:w-32 md:h-32 rounded-[22%] shadow-2xl group-hover:scale-105 transition-transform" />
+                <img src={app.icon} alt={app.name} className="w-24 h-24 md:w-32 md:h-32 rounded-[22%] shadow-2xl transition-transform" />
                 <div className="flex-1 space-y-4">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <h3 className="text-2xl font-bold">{app.name}</h3>
                       <p className="text-red-500 font-medium text-sm uppercase tracking-wide">{app.category}</p>
                     </div>
-                    <button className="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-red-600 hover:text-white transition-all transform active:scale-95 flex items-center gap-2 w-fit">
+                    <button className="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-red-600 hover:text-white transition-all flex items-center gap-2 w-fit">
                       <Download className="w-4 h-4" /> Get
                     </button>
                   </div>
@@ -69,7 +70,7 @@ const PocketopiaPortfolio: React.FC<PortfolioProps> = ({ onBack }) => {
                     </div>
                   </div>
                   <div className="pt-4 flex items-center gap-6">
-                    <button onClick={() => window.location.hash = '#/pocketopia/privacy-policy'} className="text-[10px] text-gray-500 hover:text-white uppercase tracking-widest flex items-center gap-2">
+                    <button onClick={onNavigateToPrivacy} className="text-[10px] text-gray-500 hover:text-white uppercase tracking-widest flex items-center gap-2">
                       <Shield className="w-3 h-3" /> Privacy Policy
                     </button>
                   </div>
@@ -88,11 +89,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<'hub' | 'portfolio' | 'privacy'>('hub');
   const [activeCategory, setActiveCategory] = useState<CategoryType | 'all'>('all');
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [brands, setBrands] = useState<Brand[]>(BRANDS);
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
 
+  // Sync state with URL Hash
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
@@ -101,13 +102,13 @@ const App: React.FC = () => {
       else setView('hub');
     };
     window.addEventListener('hashchange', handleHash);
-    handleHash();
+    handleHash(); // Initial check
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
   useEffect(() => {
     onAuthStateChanged(auth, (u) => setUser(u));
-    const unsubscribe = onSnapshot(collection(db, 'assets'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'assets'), () => {
       setIsAssetsLoading(false);
     });
     return () => unsubscribe();
@@ -117,23 +118,51 @@ const App: React.FC = () => {
     return brands.filter(brand => activeCategory === 'all' || brand.category === activeCategory);
   }, [activeCategory, brands]);
 
-  if (view === 'portfolio') return <PocketopiaPortfolio onBack={() => window.location.hash = ''} />;
+  // Navigation Helpers
+  const goToPortfolio = () => {
+    window.location.hash = '#/pocketopia/portfolio';
+    setView('portfolio');
+  };
+
+  const goToHub = () => {
+    window.location.hash = '';
+    setView('hub');
+  };
+
+  const goToPrivacy = () => {
+    window.location.hash = '#/pocketopia/privacy-policy';
+    setView('privacy');
+  };
+
+  // Render Logic
+  if (view === 'portfolio') {
+    return <PocketopiaPortfolio onBack={goToHub} onNavigateToPrivacy={goToPrivacy} />;
+  }
   
-  if (view === 'privacy') return (
-    <div className="min-h-screen bg-black text-white p-12 flex flex-col items-center justify-center text-center">
-      <Shield className="w-16 h-16 text-red-600 mb-6" />
-      <h1 className="text-4xl font-black uppercase mb-4 font-futuristic">Privacy Policy</h1>
-      <p className="text-gray-400 max-w-lg mb-8">This page is being updated to reflect BandTag's data protection standards.</p>
-      <button onClick={() => window.location.hash = '#/pocketopia/portfolio'} className="text-red-500 uppercase font-bold tracking-widest text-xs">Return to Portfolio</button>
-    </div>
-  );
+  if (view === 'privacy') {
+    return (
+      <div className="min-h-screen bg-black text-white p-12 flex flex-col items-center justify-center text-center">
+        <Shield className="w-16 h-16 text-red-600 mb-6" />
+        <h1 className="text-4xl font-black uppercase mb-4 font-futuristic">Privacy Policy</h1>
+        <p className="text-gray-400 max-w-lg mb-8">This policy details how BandTag and the Pocketopia ecosystem protect musician and venue data. We prioritize transparency and user control.</p>
+        <button onClick={goToPortfolio} className="text-red-500 uppercase font-bold tracking-widest text-xs">Return to Portfolio</button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">
       <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/10 p-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <h1 className="font-futuristic text-2xl font-black uppercase">Hektic <span className="text-red-600">Hub</span></h1>
-          <button onClick={() => window.location.hash = '#/pocketopia/portfolio'} className="glass-card px-4 py-2 rounded-full text-[10px] font-bold text-red-500 uppercase tracking-widest">View Apps</button>
+          <h1 className="font-futuristic text-2xl font-black uppercase cursor-pointer" onClick={goToHub}>
+            Hektic <span className="text-red-600">Hub</span>
+          </h1>
+          <button 
+            onClick={goToPortfolio} 
+            className="glass-card px-4 py-2 rounded-full text-[10px] font-bold text-red-500 uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
+          >
+            View Apps
+          </button>
         </div>
       </header>
       
@@ -144,7 +173,7 @@ const App: React.FC = () => {
               key={brand.id} 
               brand={brand} 
               onClick={(b) => {
-                if (b.id === 'pocketopia') window.location.hash = '#/pocketopia/portfolio';
+                if (b.id === 'pocketopia') goToPortfolio();
                 else setSelectedBrand(b);
               }} 
             />
