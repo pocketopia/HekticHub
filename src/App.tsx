@@ -1,177 +1,160 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
 import { CategoryType, Brand } from './types';
-import { BRANDS } from './constants';
+import { BRANDS, CATEGORY_ICONS } from './constants';
 import { BrandCard } from './components/BrandCard';
 import { BrandModal } from './components/BrandModal';
 import { AdminMenu } from './components/AdminMenu';
-import { ShieldCheck, Activity } from 'lucide-react';
+import { ChevronDown, Menu, ArrowRight, ShieldCheck, ArrowLeft, Download, Info, Shield } from 'lucide-react';
 
 import { db, auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
-// --- DEEP LINK HANDLER ---
-// This watches the URL and forces the modal open if a user visits a link directly
-const BusinessRoute = ({ brands, setSelectedBrand }: { brands: Brand[], setSelectedBrand: (b: Brand) => void }) => {
-  const { businessId } = useParams();
-  
-  useEffect(() => {
-    if (businessId) {
-      const brand = brands.find(b => b.id.toLowerCase() === businessId.toLowerCase());
-      if (brand) {
-        setSelectedBrand(brand);
-        document.title = `${brand.name} | Hektic Hub`;
-      }
+// --- POCKETOPIA PORTFOLIO COMPONENT (Apple Store Design) ---
+interface PortfolioProps {
+  onBack: () => void;
+}
+
+const PocketopiaPortfolio: React.FC<PortfolioProps> = ({ onBack }) => {
+  const apps = [
+    {
+      id: 'bandtag',
+      name: 'BandTag',
+      icon: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=200',
+      category: 'Music & Networking',
+      description: 'The ultimate ecosystem for musicians and venues to connect, book shows, and grow their local scene.',
+      details: 'Available for iOS and Android. Features include real-time venue booking, musician matching, and digital EPK hosting.',
+      downloadUrl: '#'
     }
-  }, [businessId, brands, setSelectedBrand]);
-
-  return null;
-};
-
-// --- MAIN APP LOGIC ---
-const AppContent: React.FC = () => {
-  const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
-  const [brands, setBrands] = useState<Brand[]>(BRANDS);
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
-  
-  const navigate = useNavigate();
-
-  // 1. Monitor Auth State
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsubscribe();
-  }, []);
-
-  // 2. Sync with Firebase (With bypass logic for Quota Errors)
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'assets'), 
-      (snapshot) => {
-        const overrides: Record<string, any> = {};
-        snapshot.forEach((doc) => {
-          overrides[doc.id] = doc.data();
-        });
-        setBrands(BRANDS.map(b => ({ ...b, ...(overrides[b.id] || {}) })));
-        setIsAssetsLoading(false);
-      }, 
-      (error) => {
-        console.error("FIRESTORE ERROR (Likely Quota):", error);
-        // If Firestore fails, we stop the loading spinner so the user can still use the site
-        setIsAssetsLoading(false);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  // 3. Navigation Handler (The Phase 1 Engine)
-  const handleBrandSelection = (brand: Brand) => {
-    const urlFriendlyId = brand.id.toLowerCase().replace(/\s+/g, '-');
-    
-    // We navigate FIRST to ensure the URL updates immediately
-    navigate(`/${urlFriendlyId}`);
-    setSelectedBrand(brand);
-  };
+  ];
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono selection:bg-red-600">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-black/90 backdrop-blur-md border-b border-zinc-900 p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <Link 
-            to="/" 
-            onClick={() => { setSelectedBrand(null); navigate('/'); }}
-            className="text-red-600 font-black text-2xl tracking-tighter flex items-center gap-2"
-          >
-            <Activity /> HEKTIC HUB
-          </Link>
-          
-          <button 
-            onClick={() => setIsAdminOpen(true)}
-            className="p-2 text-zinc-700 hover:text-red-600 transition-colors"
-          >
-            <ShieldCheck size={24} />
+    <div className="min-h-screen bg-[#050505] text-white font-sans animate-in fade-in duration-500">
+      <nav className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/5 px-6 py-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <button onClick={onBack} className="flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors font-futuristic text-xs uppercase tracking-widest">
+            <ArrowLeft className="w-4 h-4" /> Back to Hub
           </button>
+          <h2 className="font-futuristic text-lg font-black tracking-tighter uppercase">Pocketopia <span className="text-red-600 text-xs">Portfolio</span></h2>
         </div>
-      </header>
+      </nav>
 
-      {/* Main Layout */}
-      <main className="max-w-7xl mx-auto p-6">
-        <Routes>
-          {/* Dashboard View */}
-          <Route path="/" element={
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {brands.map(brand => (
-                <BrandCard 
-                  key={brand.id} 
-                  brand={brand} 
-                  onClick={() => handleBrandSelection(brand)} 
-                />
-              ))}
-            </div>
-          } />
+      <main className="max-w-4xl mx-auto px-6 py-12 space-y-16">
+        <header className="space-y-4">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight">App Store <span className="text-red-600">Showcase</span></h1>
+          <p className="text-gray-400 text-lg max-w-2xl">Premium digital experiences crafted with precision.</p>
+        </header>
 
-          {/* Deep Link View */}
-          <Route path="/:businessId" element={
-            <>
-              <BusinessRoute brands={brands} setSelectedBrand={setSelectedBrand} />
-              {/* Background stays visible but dimmed */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 opacity-20 pointer-events-none blur-sm">
-                {brands.map(brand => <BrandCard key={brand.id} brand={brand} onClick={() => {}} />)}
+        <div className="space-y-8">
+          {apps.map((app) => (
+            <div key={app.id} className="group relative bg-[#0A0A0A] border border-white/5 rounded-[2.5rem] p-8 hover:bg-[#111111] transition-all duration-500">
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <img src={app.icon} alt={app.name} className="w-24 h-24 md:w-32 md:h-32 rounded-[22%] shadow-2xl group-hover:scale-105 transition-transform" />
+                <div className="flex-1 space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl font-bold">{app.name}</h3>
+                      <p className="text-red-500 font-medium text-sm uppercase tracking-wide">{app.category}</p>
+                    </div>
+                    <button className="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-red-600 hover:text-white transition-all transform active:scale-95 flex items-center gap-2 w-fit">
+                      <Download className="w-4 h-4" /> Get
+                    </button>
+                  </div>
+                  <p className="text-gray-300 leading-relaxed">{app.description}</p>
+                  <div className="bg-white/5 rounded-2xl p-5 border border-white/5 flex gap-4">
+                    <Info className="w-5 h-5 text-red-600 shrink-0 mt-1" />
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold uppercase text-gray-400 tracking-widest">Details</p>
+                      <p className="text-sm text-gray-300 leading-snug">{app.details}</p>
+                    </div>
+                  </div>
+                  <div className="pt-4 flex items-center gap-6">
+                    <button onClick={() => window.location.hash = '#/pocketopia/privacy-policy'} className="text-[10px] text-gray-500 hover:text-white uppercase tracking-widest flex items-center gap-2">
+                      <Shield className="w-3 h-3" /> Privacy Policy
+                    </button>
+                  </div>
+                </div>
               </div>
-            </>
-          } />
-        </Routes>
-      </main>
-
-      {/* The Section Modal */}
-      {selectedBrand && (
-        <BrandModal 
-          brand={selectedBrand} 
-          onClose={() => {
-            setSelectedBrand(null);
-            navigate('/');
-            document.title = "Hektic Hub | Mothership";
-          }} 
-        />
-      )}
-
-      {/* Admin Panel */}
-      {isAdminOpen && (
-        <AdminMenu 
-          brands={brands} 
-          user={user} 
-          onClose={() => setIsAdminOpen(false)} 
-          onLogin={async () => {
-            const provider = new GoogleAuthProvider();
-            try {
-              await signInWithPopup(auth, provider);
-            } catch (err) {
-              console.error("Login Error:", err);
-              alert("Ensure hektichub.com is added to Authorized Domains in Firebase.");
-            }
-          }}
-        />
-      )}
-
-      {/* Loading Overlay */}
-      {isAssetsLoading && (
-        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-          <div className="text-red-600 animate-pulse font-black tracking-widest uppercase">
-            Syncing Ecosystem...
-          </div>
+            </div>
+          ))}
         </div>
-      )}
+      </main>
     </div>
   );
 };
 
-// --- WRAPPER ---
-export default function App() {
-  return (
-    <Router>
-      <AppContent />
-    </Router>
+// --- MAIN APP COMPONENT ---
+const App: React.FC = () => {
+  const [view, setView] = useState<'hub' | 'portfolio' | 'privacy'>('hub');
+  const [activeCategory, setActiveCategory] = useState<CategoryType | 'all'>('all');
+  const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [brands, setBrands] = useState<Brand[]>(BRANDS);
+  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#/pocketopia/portfolio') setView('portfolio');
+      else if (hash === '#/pocketopia/privacy-policy') setView('privacy');
+      else setView('hub');
+    };
+    window.addEventListener('hashchange', handleHash);
+    handleHash();
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  useEffect(() => {
+    onAuthStateChanged(auth, (u) => setUser(u));
+    const unsubscribe = onSnapshot(collection(db, 'assets'), (snapshot) => {
+      setIsAssetsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const filteredBrands = useMemo(() => {
+    return brands.filter(brand => activeCategory === 'all' || brand.category === activeCategory);
+  }, [activeCategory, brands]);
+
+  if (view === 'portfolio') return <PocketopiaPortfolio onBack={() => window.location.hash = ''} />;
+  
+  if (view === 'privacy') return (
+    <div className="min-h-screen bg-black text-white p-12 flex flex-col items-center justify-center text-center">
+      <Shield className="w-16 h-16 text-red-600 mb-6" />
+      <h1 className="text-4xl font-black uppercase mb-4 font-futuristic">Privacy Policy</h1>
+      <p className="text-gray-400 max-w-lg mb-8">This page is being updated to reflect BandTag's data protection standards.</p>
+      <button onClick={() => window.location.hash = '#/pocketopia/portfolio'} className="text-red-500 uppercase font-bold tracking-widest text-xs">Return to Portfolio</button>
+    </div>
   );
-}
+
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-xl border-b border-white/10 p-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <h1 className="font-futuristic text-2xl font-black uppercase">Hektic <span className="text-red-600">Hub</span></h1>
+          <button onClick={() => window.location.hash = '#/pocketopia/portfolio'} className="glass-card px-4 py-2 rounded-full text-[10px] font-bold text-red-500 uppercase tracking-widest">View Apps</button>
+        </div>
+      </header>
+      
+      <main className="max-w-7xl mx-auto px-6 mt-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredBrands.map(brand => (
+            <BrandCard 
+              key={brand.id} 
+              brand={brand} 
+              onClick={(b) => {
+                if (b.id === 'pocketopia') window.location.hash = '#/pocketopia/portfolio';
+                else setSelectedBrand(b);
+              }} 
+            />
+          ))}
+        </div>
+      </main>
+
+      {selectedBrand && <BrandModal brand={selectedBrand} onClose={() => setSelectedBrand(null)} />}
+    </div>
+  );
+};
+
+export default App;
