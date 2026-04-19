@@ -86,6 +86,7 @@ const PocketopiaPortfolio: React.FC<PortfolioProps> = ({ onBack, onNavigateToPri
 
 // --- MAIN APP COMPONENT ---
 const App: React.FC = () => {
+  // SET DEFAULT TO 'hub' SO IT DOES NOT OPEN ON PRIVACY POLICY
   const [view, setView] = useState<'hub' | 'portfolio' | 'privacy'>('hub');
   const [activeCategory, setActiveCategory] = useState<CategoryType | 'all'>('all');
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
@@ -97,9 +98,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
-      if (hash === '#/pocketopia/portfolio') setView('portfolio');
-      else if (hash === '#/pocketopia/privacy-policy') setView('privacy');
-      else setView('hub');
+      if (hash === '#/pocketopia/portfolio') {
+        setView('portfolio');
+      } else if (hash === '#/pocketopia/privacy-policy') {
+        setView('privacy');
+      } else {
+        setView('hub'); // Forces everything else to the Hub
+      }
     };
     window.addEventListener('hashchange', handleHash);
     handleHash(); // Initial check
@@ -141,11 +146,33 @@ const App: React.FC = () => {
   
   if (view === 'privacy') {
     return (
-      <div className="min-h-screen bg-black text-white p-12 flex flex-col items-center justify-center text-center">
-        <Shield className="w-16 h-16 text-red-600 mb-6" />
-        <h1 className="text-4xl font-black uppercase mb-4 font-futuristic">Privacy Policy</h1>
-        <p className="text-gray-400 max-w-lg mb-8">This policy details how BandTag and the Pocketopia ecosystem protect musician and venue data. We prioritize transparency and user control.</p>
-        <button onClick={goToPortfolio} className="text-red-500 uppercase font-bold tracking-widest text-xs">Return to Portfolio</button>
+      <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12 flex flex-col items-center">
+        <div className="max-w-3xl w-full text-left space-y-6 bg-[#0A0A0A] p-8 rounded-3xl border border-white/5 mt-10">
+          <div className="flex items-center gap-4 border-b border-white/10 pb-6 mb-6">
+            <Shield className="w-12 h-12 text-red-600" />
+            <div>
+              <h1 className="text-3xl font-black uppercase font-futuristic">Privacy <span className="text-red-600">Policy</span></h1>
+              <p className="text-gray-500 text-sm tracking-widest uppercase mt-1">Pocketopia LLC</p>
+            </div>
+          </div>
+          
+          <div className="text-gray-300 space-y-4 text-sm leading-relaxed">
+            <p><strong>1. Overview:</strong> This Privacy Policy applies to all applications, services, and websites operated by Pocketopia LLC, including BandTag. We are committed to protecting the privacy of our users.</p>
+            <p><strong>2. Information We Collect:</strong> To provide our services, we may collect Account Information (name, email), User Content (event details, EPKs), Device Data, and Usage Data.</p>
+            <p><strong>3. Artificial Intelligence & "The Roadie":</strong> Our services utilize AI ("The Roadie") to generate packing lists, equipment inventories, and event schedules. AI processing is used solely to generate content for the user. We do not sell your personal data to third-party AI trainers.</p>
+            <p><strong>4. How We Use Your Information:</strong> To facilitate networking and booking, power AI-driven tools, and improve the Pocketopia ecosystem.</p>
+            <p><strong>5. Data Sharing & Disclosure:</strong> Pocketopia LLC does not sell your personal data. We only share information when necessary to facilitate a booking or required by law.</p>
+            <p><strong>6. Data Deletion & Retention:</strong> Users may request the permanent deletion of their account and all associated data at any time. To request deletion, please use the "Delete Account" feature within the app settings or email us at support@hektichub.com.</p>
+            <p><strong>7. Contact Us:</strong> For questions, contact Pocketopia LLC Support at support@hektichub.com.</p>
+          </div>
+
+          <div className="pt-8 border-t border-white/10 mt-8 flex justify-between items-center">
+            <button onClick={goToPortfolio} className="text-red-500 hover:text-white transition-colors uppercase font-bold tracking-widest text-xs flex items-center gap-2">
+              <ArrowLeft className="w-4 h-4" /> Return to Portfolio
+            </button>
+            <span className="text-[10px] text-gray-600 uppercase tracking-widest">Last Updated: April 2026</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -182,6 +209,9 @@ const App: React.FC = () => {
       </main>
 
       {selectedBrand && <BrandModal brand={selectedBrand} onClose={() => setSelectedBrand(null)} />}
+      
+      {/* Admin Menu rendered here */}
+      <AdminMenu />
     </div>
   );
 };
